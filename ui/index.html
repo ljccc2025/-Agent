@@ -958,25 +958,87 @@
 
   <!-- 前端快捷交互脚本 -->
   <script>
-    function triggerManualRca() {
+    const API_BASE = window.location.protocol === 'file:' ? 'http://192.168.100.136:8080' : '';
+
+    async function triggerManualRca() {
       const target = prompt("请输入你想立即排查的目标（例如：k8s_pod/order-service 或 linux_node/192.168.1.101）：", "order-service");
-      if (target) {
-        alert("🚀 已成功向 OpsPilot Agent 分派排查任务: " + target + "\n\n系统将在 2 秒内完成 Phase 1 快速拓扑抓取与 Phase 2 状态机深挖！");
+      if (!target) return;
+
+      const isNode = target.includes("192.168") || target.includes("node") || target.includes("linux_node");
+      const targetType = isNode ? "linux_node" : "k8s_pod";
+      const targetName = target.replace("k8s_pod/", "").replace("linux_node/", "");
+
+      console.log(`[OpsPilot UI] Dispatching manual RCA for ${targetType}: ${targetName}`);
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/v1/diagnose`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target_type: targetType,
+            target_name: targetName,
+            namespace: isNode ? null : "prod",
+            symptoms: `Manual RCA triggered for ${targetName}`
+          })
+        });
+
+        if (!resp.ok) {
+          throw new Error(`HTTP error! status: ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        console.log("[OpsPilot UI] RCA Dispatched Successfully:", data);
+        alert(`🚀 任务分派成功！\n\n- 任务编号: ${data.task_id}\n- 排查目标: ${data.task.target_name} (${data.task.target_type})\n- 状态: ${data.status}\n\nAgent 正在虚拟机后台执行全链路因果排查！`);
+      } catch (err) {
+        console.error("[OpsPilot UI] Dispatch error:", err);
+        alert(`⚠️ API 调用提示: ${err.message}\n(请确保 OpsPilot 服务端已在 8080 端口启动)`);
       }
     }
 
     function fillPrompt(text) {
-      document.getElementById('ai-input').value = text;
-      document.getElementById('ai-input').focus();
+      const inputEl = document.getElementById('ai-input');
+      if (inputEl) {
+        inputEl.value = text;
+        inputEl.focus();
+      }
     }
 
-    function runAiBuilder() {
-      const input = document.getElementById('ai-input').value.trim();
+    async function runAiBuilder() {
+      const inputEl = document.getElementById('ai-input');
+      const input = inputEl ? inputEl.value.trim() : "";
       if (!input) {
         alert("请先在文本框中输入异常症状描述！");
         return;
       }
-      alert("✨ OpsPilot AI 正在启动针对「" + input + "」的智能因果推理...\n\n- Phase 1 确定性事实收集已就绪\n- Phase 2 状态机深挖中 (Prometheus + K8s Logs)\n- 即将输出标准 Markdown RCA 诊断报告！");
+
+      console.log(`[OpsPilot UI] Running AI RCA Builder with symptoms: "${input}"`);
+
+      let targetType = "k8s_pod";
+      let targetName = "payment-service";
+      if (input.includes("磁盘") || input.includes("Disk") || input.includes("node")) {
+        targetType = "linux_node";
+        targetName = "192.168.100.136";
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/v1/diagnose`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target_type: targetType,
+            target_name: targetName,
+            namespace: targetType === "k8s_pod" ? "prod" : null,
+            symptoms: input
+          })
+        });
+
+        const data = await resp.json();
+        console.log("[OpsPilot UI] AI Builder Task Dispatched:", data);
+        alert(`✨ AI RCA 启动成功！\n\n- 任务 ID: ${data.task_id}\n- 诊断目标: ${data.task.target_name}\n- 症状特征: ${data.task.symptoms}\n\n系统正通过确定性 SOP 与状态机推导演进报告！`);
+      } catch (err) {
+        console.error("[OpsPilot UI] AI Builder Error:", err);
+        alert(`⚠️ 提交失败: ${err.message}`);
+      }
     }
   </script>
 </body>

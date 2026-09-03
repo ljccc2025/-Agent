@@ -57,6 +57,13 @@ def create_app() -> FastAPI:
     application.include_router(webhook_router)
     application.include_router(diagnose_router)
 
+    # 挂载静态 UI 控制台
+    import os
+    from fastapi.staticfiles import StaticFiles
+    ui_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
+    if os.path.exists(ui_dir):
+        application.mount("/ui", StaticFiles(directory=ui_dir, html=True), name="ui")
+
     return application
 
 app = create_app()
