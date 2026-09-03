@@ -1,5 +1,6 @@
 import time
-from fastapi import FastAPI, Request
+from collections.abc import Awaitable, Callable
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from opspilot.config import settings
 
@@ -12,26 +13,29 @@ def create_app() -> FastAPI:
         redoc_url="/redoc"
     )
 
-    # 跨域配置
+    # 跨域配置：生产环境安全加固，禁止携带凭据与全通配符叠加
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # 请求计时中间件
+    # 请求计时中间件 (采用高精度单调时钟)
     @application.middleware("http")
-    async def add_process_time_header(request: Request, call_next):
-        start_time = time.time()
+    async def add_process_time_header(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        start_time = time.perf_counter()
         response = await call_next(request)
-        process_time = time.time() - start_time
+        process_time = time.perf_counter() - start_time
         response.headers["X-Process-Time"] = f"{process_time:.4f}s"
         return response
 
     @application.get("/healthz", tags=["System"])
-    def healthz():
+    async def healthz() -> dict[str, object]:
         return {
             "status": "healthy",
             "service": settings.APP_NAME,
@@ -40,7 +44,7 @@ def create_app() -> FastAPI:
         }
 
     @application.get("/", tags=["System"])
-    def root():
+    async def root() -> dict[str, object]:
         return {
             "service": settings.APP_NAME,
             "version": settings.APP_VERSION,
