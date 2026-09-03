@@ -3,6 +3,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from opspilot.config import settings
+from opspilot.api.routes_webhook import router as webhook_router
 
 def create_app() -> FastAPI:
     application = FastAPI(
@@ -51,6 +52,9 @@ def create_app() -> FastAPI:
             "message": "OpsPilot AIOps RCA Agent is running",
             "docs": "/docs"
         }
+
+    # 挂载业务路由
+    application.include_router(webhook_router)
 
     return application
 
