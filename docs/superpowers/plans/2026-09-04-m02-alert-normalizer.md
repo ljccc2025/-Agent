@@ -54,16 +54,16 @@
 - **文件：**
   - 创建：`opspilot/normalizer/adapters.py`
   - 测试：`tests/test_adapters.py`
-- [ ] 步骤 1：编写异构监控源解析测试（RED）
-- [ ] 步骤 2：实现多适配器与注册表（GREEN）
-- [ ] 步骤 3：Git 提交
+- [x] 步骤 1：编写异构监控源解析测试（RED）
+- [x] 步骤 2：实现多适配器与注册表（GREEN）
+- [x] 步骤 3：Git 提交
 
 ### 任务 6：Webhook 路由升级与 M02 端到端集成测试
 - **目标：** 在 `opspilot/api/routes_webhook.py` 接入去重器与适配器；新增 `/webhook/grafana`；编写端到端集成测试并在虚拟机上部署验证。
 - **文件：**
   - 修改：`opspilot/api/routes_webhook.py`
   - 创建：`tests/test_m02_integration.py`
-- [ ] 步骤 1：编写端到端集成测试（RED）
-- [ ] 步骤 2：升级 Webhook 路由接入去重流程（GREEN）
-- [ ] 步骤 3：全量回归 `pytest tests/ -v`
-- [ ] 步骤 4：虚拟机同步、编译、测试与 Git 提交
+- [x] 步骤 1：编写端到端集成测试（RED）
+- [x] 步骤 2：升级 Webhook 路由接入去重流程（GREEN）
+- [x] 步骤 3：全量回归 `pytest tests/ -v`
+- [x] 步骤 4：虚拟机同步、编译、测试与 Git 提交
