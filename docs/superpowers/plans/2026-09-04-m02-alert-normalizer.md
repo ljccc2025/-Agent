@@ -45,9 +45,9 @@
 - **文件：**
   - 创建：`opspilot/normalizer/throttler.py`
   - 测试：`tests/test_throttler.py`
-- [ ] 步骤 1：编写风暴抑制测试（RED）
-- [ ] 步骤 2：实现 `AlertStormThrottler`（GREEN）
-- [ ] 步骤 3：Git 提交
+- [x] 步骤 1：编写风暴抑制测试（RED）
+- [x] 步骤 2：实现 `AlertStormThrottler`（GREEN）
+- [x] 步骤 3：Git 提交
 
 ### 任务 5：多监控平台适配器与通用 Normalizer (`opspilot/normalizer/adapters.py`)
 - **目标：** 实现 `AlertmanagerAdapter`、`GrafanaAlertAdapter` 与 `NormalizerRegistry`，自动推断异构监控源并归一化为 `DiagnosticTask`。

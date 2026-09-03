@@ -375,7 +375,16 @@ class NormalizerRegistry:
         self.register(GenericAlertAdapter())
 
     def register(self, adapter: BaseAlertAdapter) -> None:
-        self._adapters.append(adapter)
+        # 如果列表中已有 GenericAlertAdapter 兜底适配器，将新适配器插入到兜底适配器之前
+        generic_idx = -1
+        for idx, existing in enumerate(self._adapters):
+            if isinstance(existing, GenericAlertAdapter):
+                generic_idx = idx
+                break
+        if generic_idx != -1 and not isinstance(adapter, GenericAlertAdapter):
+            self._adapters.insert(generic_idx, adapter)
+        else:
+            self._adapters.append(adapter)
 
     def normalize(self, raw_payload: Dict[str, Any], firing_only: bool = True) -> List[DiagnosticTask]:
         """自动推断载荷格式并转换为 DiagnosticTask 列表"""
