@@ -18,3 +18,6 @@ class DiagnosticTask(BaseModel):
     alert_name: Optional[str] = Field(default=None, description="触发告警规则名称")
     alert_labels: Dict[str, Any] = Field(default_factory=dict, description="关联告警标签集")
     symptoms: str = Field(..., min_length=1, description="故障初始表象描述")
+    fingerprint: Optional[str] = Field(default=None, description="确定性告警指纹哈希")
+    duplicate_count: int = Field(default=0, description="窗口期内被去重抑制的重复频次")
+    is_storm_aggregated: bool = Field(default=False, description="是否由告警风暴聚合生成")

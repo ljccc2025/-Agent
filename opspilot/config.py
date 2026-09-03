@@ -27,4 +27,9 @@ class Settings(BaseSettings):
     MAX_DEEPDIVE_ROUNDS: int = 3
     LOG_TAIL_LINES: int = 100
 
+    # 告警去重与风暴控制参数 (M02)
+    ALERT_DEDUP_WINDOW_SECONDS: int = 300
+    ALERT_STORM_THRESHOLD: int = 50
+    ALERT_STORM_WINDOW_SECONDS: int = 60
+
 settings = Settings()
