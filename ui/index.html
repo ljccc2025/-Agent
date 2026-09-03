@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpsPilot - 智能自动化运维排障平台 (AIOps RCA Agent)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.1); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-badge {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.4);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.7);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-500 selection:text-white">
+
+  <!-- 顶部导航栏 -->
+  <header class="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 font-black text-xl text-white">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">OpsPilot</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">AIOps RCA v1.0</span>
+        </div>
+        <p class="text-xs text-slate-400">自动化故障排查与根因分析 Agent</p>
+      </div>
+    </div>
+
+    <!-- 集群与安全沙箱状态指示 -->
+    <div class="flex items-center gap-4">
+      <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-badge"></span>
+        <span class="text-slate-300">K8s 集群: <strong class="text-white">k8s-prod-cluster</strong> (3 Nodes)</span>
+      </div>
+
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+        <span>只读安全沙箱: <strong>Active (Zero-Mutation)</strong></span>
+      </div>
+
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300 font-mono">
+        <span>Model: <strong>DeepSeek-V3 / Qwen-2.5</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体工作区 -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- 左侧快捷功能侧边栏 -->
+    <aside class="w-64 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col justify-between hidden lg:flex">
+      <div class="space-y-6">
+        <div>
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">排障控制台</div>
+          <nav class="space-y-1">
+            <button id="btn-tab-alerts" onclick="switchMainTab('alerts')" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 border border-blue-500/20">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                告警触发与 RCA
+              </span>
+              <span class="px-1.5 py-0.5 rounded text-xs bg-red-500/20 text-red-400 font-mono">2 Active</span>
+            </button>
+
+            <button id="btn-tab-chat" onclick="switchMainTab('chat')" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                SRE 交互排查 (ChatOps)
+              </span>
+              <span class="px-1.5 py-0.5 rounded text-xs bg-slate-800 text-slate-400 font-mono">CLI Ready</span>
+            </button>
+
+            <button id="btn-tab-sandbox" onclick="switchMainTab('sandbox')" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                安全沙箱与审计日志
+              </span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- 模拟故障场景切换器 -->
+        <div class="p-3.5 rounded-xl bg-slate-800/40 border border-slate-700/50">
+          <div class="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+            <span>🧪 演练故障快捷注入</span>
+          </div>
+          <p class="text-xs text-slate-400 mb-3 leading-relaxed">点击切换以体验不同基础架构故障下的 Agent 推理：</p>
+          <div class="space-y-1.5">
+            <button onclick="loadScenario('oom')" class="w-full text-left px-2.5 py-1.5 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-between">
+              <span>K8s Pod 内存超限 (OOM)</span>
+              <span class="text-red-400 font-mono">Exit 137</span>
+            </button>
+            <button onclick="loadScenario('disk')" class="w-full text-left px-2.5 py-1.5 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-between">
+              <span>Linux 节点根目录磁盘满</span>
+              <span class="text-amber-400 font-mono">98% Used</span>
+            </button>
+            <button onclick="loadScenario('crash')" class="w-full text-left px-2.5 py-1.5 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-between">
+              <span>Pod 配置缺失 CrashLoop</span>
+              <span class="text-blue-400 font-mono">BackOff</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部基础设施连接状态 -->
+      <div class="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 space-y-1.5 font-mono">
+        <div class="flex justify-between">
+          <span>Alertmanager:</span>
+          <span class="text-emerald-400">CONNECTED</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Prometheus:</span>
+          <span class="text-emerald-400">HTTP 200 (15s)</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Loki Logs:</span>
+          <span class="text-emerald-400">READY</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 中间核心工作面板 -->
+    <main class="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+      
+      <!-- 视图 1: 告警中心与 RCA 诊断流 (默认展示) -->
+      <div id="view-alerts" class="space-y-6">
+        
+        <!-- 活跃告警通知横幅 -->
+        <div class="p-4 rounded-xl bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-900 border border-red-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 mt-0.5 border border-red-500/30">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 id="alert-title" class="font-bold text-white text-base">KubePodCrashLooping: order-service-7f654b-d89x</h3>
+                <span class="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400 border border-red-500/30 font-semibold uppercase">CRITICAL</span>
+              </div>
+              <p id="alert-symptoms" class="text-xs text-slate-400 mt-1">集群检测到 default 命名空间中核心下单微服务容器异常退出 6 次，触发 Pod 重启退避保护。</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 self-end md:self-center">
+            <div class="text-right font-mono text-xs">
+              <div class="text-slate-400">告警触发: 15:32:10</div>
+              <div class="text-emerald-400 font-semibold">Agent 诊断: 完成 (耗时 1.8s)</div>
+            </div>
+            <button onclick="retriggerDiagnose()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              重新发起诊断
+            </button>
+          </div>
+        </div>
+
+        <!-- Agent 两阶段推导链路可视化 (Stepper) -->
+        <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+            <span>Agent 推理与两阶段排查拓扑链</span>
+            <span class="text-blue-400 font-mono text-xs font-normal">两阶段 SOP + 状态机深挖机制</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
+            <!-- Step 1 -->
+            <div class="p-4 rounded-lg bg-slate-800/60 border border-slate-700/60 relative">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs">✓</span>
+                  Phase 1: SOP 确定性快查
+                </span>
+                <span class="text-[10px] text-emerald-400 font-mono">0.42s</span>
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                并行执行只读探针：拉取 Pod Describe、近 100 行错误日志、Pod Events 状态快照。
+              </p>
+              <div class="mt-3 flex items-center gap-1.5 text-[11px] text-slate-300 font-mono bg-slate-900/80 px-2 py-1 rounded">
+                <span class="text-emerald-400">●</span> 命中: Terminated ExitCode: 137
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="p-4 rounded-lg bg-slate-800/60 border border-slate-700/60 relative">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs">✓</span>
+                  Phase 2: 状态机深挖 (Round 1/3)
+                </span>
+                <span class="text-[10px] text-emerald-400 font-mono">0.89s</span>
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                根据退出码 137 假设，调取 Prometheus 工具查验容器近 30 分钟内存时序增长曲线。
+              </p>
+              <div class="mt-3 flex items-center gap-1.5 text-[11px] text-slate-300 font-mono bg-slate-900/80 px-2 py-1 rounded">
+                <span class="text-emerald-400">●</span> Tool: query_prometheus(mem)
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="p-4 rounded-lg bg-blue-950/20 border border-blue-500/40 relative">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-blue-300 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-xs">★</span>
+                  Phase 3: RCA 合成与处置
+                </span>
+                <span class="text-[10px] text-blue-400 font-mono">0.51s</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                结合事实闭环因果推理，经脱敏校验生成结构化 RCA 报告与带安全级别的 SRE 处置方案。
+              </p>
+              <div class="mt-3 flex items-center gap-1.5 text-[11px] text-blue-300 font-mono bg-blue-900/40 px-2 py-1 rounded border border-blue-500/20">
+                <span>🎯 结构化输出: 100% Valid JSON</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 核心成果: RCA 诊断分析报告卡片 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+          <div class="border-b border-slate-800 bg-slate-800/40 px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <h2 class="font-bold text-white text-base">OpsPilot 核心根因分析报告 (RCA Report)</h2>
+              <span class="text-xs text-slate-400 font-mono">ID: task-7a8e2f</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="copyFullReport()" class="px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 flex items-center gap-1 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                复制 Markdown 报告
+              </button>
+            </div>
+          </div>
+
+          <div class="p-6 space-y-6">
+            
+            <!-- 一句话结论与根因卡片 -->
+            <div class="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">定位结论摘要</div>
+                <span class="px-2 py-0.5 text-xs rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">高置信度 (98%)</span>
+              </div>
+              <div id="rca-summary" class="text-lg font-bold text-white">
+                Pod 内存达到规格上限 (512Mi)，触发 Linux 内核 cgroup OOM Killer 强制终结进程
+              </div>
+              <p id="rca-root-cause" class="text-sm text-slate-300 leading-relaxed">
+                JVM 堆配置与容器 cgroup 限制冲突。应用在经历突发流量下单批处理时，堆外 DirectMemory 与堆内存叠加超过 Pod 配置的 limits.memory (512Mi)，内核抛出 SIGKILL (ExitCode 137)，从而引发 Pod 不断重启与雪崩。
+              </p>
+            </div>
+
+            <!-- 客观证据链 (Evidence Chain) -->
+            <div>
+              <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">客观推导证据链 (Evidence Chain)</div>
+              <div id="evidence-list" class="space-y-2 font-mono text-xs">
+                
+                <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold text-[10px]">k8s_pod_status</span>
+                    <p class="text-slate-300">Last State: Terminated; Reason: OOMKilled; Exit Code: 137; Restart Count: 6</p>
+                  </div>
+                  <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 100%</span>
+                </div>
+
+                <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <span class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-semibold text-[10px]">k8s_events</span>
+                    <p class="text-slate-300">Warning BackOff (x12): Back-off restarting failed container order-api in pod order-service-7f654b-d89x</p>
+                  </div>
+                  <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 95%</span>
+                </div>
+
+                <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">prometheus_metrics</span>
+                    <p class="text-slate-300">container_memory_working_set_bytes: 536870912 Bytes (达到 100% limit 配额平直红线)</p>
+                  </div>
+                  <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 98%</span>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- 人机协同处置卡片 (Human-in-the-Loop Actions) -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">SRE 分级处置方案建议 (Human-in-the-Loop)</div>
+                <span class="text-xs text-slate-500">Agent 只读待命，执行权 100% 由人类 SRE 掌控</span>
+              </div>
+
+              <div id="actions-list" class="space-y-3">
+                
+                <!-- Action 1 -->
+                <div class="p-4 rounded-xl bg-slate-800/40 border border-amber-500/30 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">MEDIUM 需关注可用性</span>
+                      <strong class="text-white text-sm">临时调大 Deployment 内存 Limit 配额至 1Gi</strong>
+                    </div>
+                    <button onclick="simulateCopyCommand('kubectl set resources deployment/order-service --limits=memory=1Gi -n default')" class="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-medium transition flex items-center gap-1 shadow">
+                      <span>📋 复制命令</span>
+                    </button>
+                  </div>
+                  <p class="text-xs text-slate-400">目的: 快速阻断生产雪崩，恢复核心下单可用性，后续通知业务研发排查内存泄漏。</p>
+                  <div class="bg-slate-950 p-2.5 rounded font-mono text-xs text-amber-200/90 border border-slate-800">
+                    kubectl set resources deployment/order-service --limits=memory=1Gi -n default
+                  </div>
+                </div>
+
+                <!-- Action 2 -->
+                <div class="p-4 rounded-xl bg-slate-800/40 border border-blue-500/30 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">LOW 安全只读</span>
+                      <strong class="text-white text-sm">抓取当前 Pod 的 JVM 线程堆栈与 GC 日志</strong>
+                    </div>
+                    <button onclick="simulateCopyCommand('kubectl logs order-service-7f654b-d89x -n default --previous > crash.log')" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-medium transition flex items-center gap-1">
+                      <span>📋 复制命令</span>
+                    </button>
+                  </div>
+                  <p class="text-xs text-slate-400">目的: 归档事故现场证据，供研发团队定位究竟是哪个接口的大对象造成堆溢出。</p>
+                  <div class="bg-slate-950 p-2.5 rounded font-mono text-xs text-slate-300 border border-slate-800">
+                    kubectl logs order-service-7f654b-d89x -n default --previous > crash.log
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 视图 2: SRE 交互排查 (ChatOps) 视图 (默认隐藏，点击切换) -->
+      <div id="view-chat" class="hidden space-y-4 flex-1 flex flex-col">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex-1 flex flex-col justify-between min-h-[460px]">
+          <div>
+            <div class="border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+                <span class="font-bold text-white text-sm">OpsPilot ChatOps 交互副驾驶</span>
+              </div>
+              <span class="text-xs text-slate-400 font-mono">CLI 模式：opspilot chat</span>
+            </div>
+
+            <!-- 消息历史 -->
+            <div id="chat-messages" class="space-y-4 overflow-y-auto max-h-[380px] pr-2">
+              
+              <!-- User Message -->
+              <div class="flex items-start gap-3 justify-end">
+                <div class="bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none text-xs max-w-md shadow">
+                  帮我排查一下 node-1 节点最近的磁盘使用情况，刚刚好像有人报告写入慢。
+                </div>
+                <div class="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs text-slate-200">SRE</div>
+              </div>
+
+              <!-- Agent Response with Tool Calling -->
+              <div class="flex items-start gap-3">
+                <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-xs text-white">⚡</div>
+                <div class="space-y-2 max-w-xl">
+                  <div class="bg-slate-800 text-slate-200 p-4 rounded-2xl rounded-tl-none text-xs space-y-3 border border-slate-700/60 shadow">
+                    <p>收到指令，正在启动对 Linux 节点 <code class="text-blue-300 font-mono">k8s-node1</code> 的磁盘与 IO 只读排查：</p>
+                    
+                    <div class="p-2.5 rounded bg-slate-950 font-mono text-[11px] text-slate-300 border border-slate-800 space-y-1">
+                      <div class="text-emerald-400 font-bold">❯ 执行白名单只读探针: df -h /</div>
+                      <div class="text-slate-400">Filesystem      Size  Used Avail Use% Mounted on</div>
+                      <div>/dev/vda1        50G   49G  850M  98% /</div>
+                    </div>
+
+                    <div class="p-2.5 rounded bg-slate-950 font-mono text-[11px] text-slate-300 border border-slate-800 space-y-1">
+                      <div class="text-emerald-400 font-bold">❯ 执行白名单只读探针: journalctl --disk-usage</div>
+                      <div class="text-slate-400">Archived and active journals take up 14.2G in the file system.</div>
+                    </div>
+
+                    <div class="border-t border-slate-700 pt-2 space-y-1">
+                      <div class="font-bold text-white">排查结论:</div>
+                      <p class="text-slate-300">根目录 `/` 剩余空间仅剩 850MB (98%)，主要是 systemd journal 历史日志积压占用 14.2GB 导致磁盘严重打满。</p>
+                      <div class="pt-2">
+                        <span class="font-bold text-amber-300">建议处置:</span>
+                        <code class="block mt-1 bg-slate-950 p-1.5 rounded text-amber-200">journalctl --vacuum-size=500M</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 输入栏 -->
+          <div class="mt-4 pt-3 border-t border-slate-800 flex gap-2">
+            <input type="text" id="chat-input" placeholder="输入你想排查的 Pod 名称、主机 IP 或异常问题（如：排查 node-2 CPU 异常）..." class="flex-1 bg-slate-950 border border-slate-700/80 rounded-lg px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500">
+            <button onclick="sendChatMessage()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition">发送提问</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 视图 3: 只读安全沙箱与审计日志视图 (默认隐藏) -->
+      <div id="view-sandbox" class="hidden space-y-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div>
+              <h3 class="font-bold text-white text-base">安全护栏与只读沙箱实时拦截审计</h3>
+              <p class="text-xs text-slate-400 mt-0.5">所有工具调用必须严格穿透安全沙箱，非白名单或任何破坏性操作将被强行熔断</p>
+            </div>
+            <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">RBAC & Whitelist: Strict Mode</span>
+          </div>
+
+          <div class="space-y-3 font-mono text-xs">
+            <div class="p-3 rounded-lg bg-slate-950 border border-red-500/30 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">BLOCKED 拦截</span>
+                <span class="text-slate-300">尝试执行变更命令: <code class="text-red-300">rm -rf /var/log/app.log</code></span>
+              </div>
+              <span class="text-slate-500 text-[11px]">原因: 'rm' 不在只读白名单</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-slate-950 border border-red-500/30 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">BLOCKED 拦截</span>
+                <span class="text-slate-300">尝试执行变更命令: <code class="text-red-300">systemctl restart nginx</code></span>
+              </div>
+              <span class="text-slate-500 text-[11px]">原因: systemctl 仅允许 status 查询</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">PASSED 放行</span>
+                <span class="text-slate-300">执行只读指令: <code class="text-emerald-300">kubectl describe pod order-service -n default</code></span>
+              </div>
+              <span class="text-slate-500 text-[11px]">敏感数据已自动脱敏 (Redacted)</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">PASSED 放行</span>
+                <span class="text-slate-300">执行时序指标查询: <code class="text-emerald-300">query_prometheus(container_memory_usage)</code></span>
+              </div>
+              <span class="text-slate-500 text-[11px]">只读 HTTP GET (耗时 42ms)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- 右侧集群拓扑与健康度看板 -->
+    <aside class="w-72 border-l border-slate-800 bg-slate-900/40 p-5 hidden xl:flex flex-col justify-between overflow-y-auto">
+      <div class="space-y-6">
+        <div>
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">集群节点实时体征</div>
+          
+          <div class="space-y-3 text-xs">
+            <!-- Node 1 -->
+            <div class="p-3 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+              <div class="flex items-center justify-between font-semibold text-slate-200">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  k8s-master1
+                </span>
+                <span class="text-[10px] text-slate-400 font-mono">Control-Plane</span>
+              </div>
+              <div class="space-y-1 text-slate-400 text-[11px]">
+                <div class="flex justify-between"><span>CPU:</span><span class="text-slate-200 font-mono">24%</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-blue-500 h-full w-[24%]"></div></div>
+                <div class="flex justify-between"><span>MEM:</span><span class="text-slate-200 font-mono">4.2G / 16G (26%)</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-blue-500 h-full w-[26%]"></div></div>
+              </div>
+            </div>
+
+            <!-- Node 2 (Warning) -->
+            <div class="p-3 rounded-xl bg-slate-800/50 border border-red-500/40 space-y-2">
+              <div class="flex items-center justify-between font-semibold text-slate-200">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-red-400 pulse-badge"></span>
+                  k8s-node1
+                </span>
+                <span class="text-[10px] text-red-400 font-mono">OOM Event</span>
+              </div>
+              <div class="space-y-1 text-slate-400 text-[11px]">
+                <div class="flex justify-between"><span>CPU:</span><span class="text-slate-200 font-mono">68%</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-blue-500 h-full w-[68%]"></div></div>
+                <div class="flex justify-between"><span class="text-red-300 font-bold">MEM:</span><span class="text-red-300 font-mono font-bold">14.8G / 16G (92%)</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-red-500 h-full w-[92%]"></div></div>
+              </div>
+            </div>
+
+            <!-- Node 3 -->
+            <div class="p-3 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+              <div class="flex items-center justify-between font-semibold text-slate-200">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  k8s-node2
+                </span>
+                <span class="text-[10px] text-slate-400 font-mono">Healthy</span>
+              </div>
+              <div class="space-y-1 text-slate-400 text-[11px]">
+                <div class="flex justify-between"><span>CPU:</span><span class="text-slate-200 font-mono">18%</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-blue-500 h-full w-[18%]"></div></div>
+                <div class="flex justify-between"><span>MEM:</span><span class="text-slate-200 font-mono">6.1G / 16G (38%)</span></div>
+                <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden"><div class="bg-blue-500 h-full w-[38%]"></div></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 快速统计 -->
+        <div class="p-3.5 rounded-xl bg-slate-800/40 border border-slate-800 space-y-2">
+          <div class="text-xs font-semibold text-slate-300">今日排障效能概览</div>
+          <div class="grid grid-cols-2 gap-2 text-center">
+            <div class="p-2 rounded bg-slate-900 border border-slate-800">
+              <div class="text-base font-bold text-white">18</div>
+              <div class="text-[10px] text-slate-400">自动分析告警</div>
+            </div>
+            <div class="p-2 rounded bg-slate-900 border border-slate-800">
+              <div class="text-base font-bold text-emerald-400">1.6s</div>
+              <div class="text-[10px] text-slate-400">平均排障耗时</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-[11px] text-slate-500 text-center">
+        OpsPilot Agent System &copy; 2026
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- 前端交互逻辑 -->
+  <script>
+    // Tab 切换
+    function switchMainTab(tabName) {
+      document.getElementById('view-alerts').classList.add('hidden');
+      document.getElementById('view-chat').classList.add('hidden');
+      document.getElementById('view-sandbox').classList.add('hidden');
+
+      document.getElementById('btn-tab-alerts').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition";
+      document.getElementById('btn-tab-chat').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition";
+      document.getElementById('btn-tab-sandbox').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition";
+
+      if (tabName === 'alerts') {
+        document.getElementById('view-alerts').classList.remove('hidden');
+        document.getElementById('btn-tab-alerts').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 border border-blue-500/20";
+      } else if (tabName === 'chat') {
+        document.getElementById('view-chat').classList.remove('hidden');
+        document.getElementById('btn-tab-chat').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 border border-blue-500/20";
+      } else if (tabName === 'sandbox') {
+        document.getElementById('view-sandbox').classList.remove('hidden');
+        document.getElementById('btn-tab-sandbox').className = "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 border border-blue-500/20";
+      }
+    }
+
+    // 模拟场景快速切换
+    function loadScenario(type) {
+      switchMainTab('alerts');
+      if (type === 'disk') {
+        document.getElementById('alert-title').innerText = "NodeDiskSpaceFillingUp: k8s-node1 (/dev/vda1)";
+        document.getElementById('alert-symptoms').innerText = "主机 192.168.1.101 根分区磁盘使用率达 98%，可用空间不足 850MB，存在写入阻塞风险。";
+        document.getElementById('rca-summary').innerText = "systemd journal 历史轮转归档日志持续膨胀，耗尽系统根分区存储";
+        document.getElementById('rca-root-cause').innerText = "经查 /var/log/journal 目录占用 14.2GB 空间。系统未配置 SystemMaxUse 阈值导致持续堆积，最终引发系统 DiskPressure。";
+        document.getElementById('evidence-list').innerHTML = `
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold text-[10px]">host_df</span>
+              <p class="text-slate-300">/dev/vda1 50G Used 49G (98%), Avail 850M</p>
+            </div>
+            <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 100%</span>
+          </div>
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold text-[10px]">journalctl_stat</span>
+              <p class="text-slate-300">Archived journals take up 14.2G in /var/log/journal</p>
+            </div>
+            <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 99%</span>
+          </div>
+        `;
+        document.getElementById('actions-list').innerHTML = `
+          <div class="p-4 rounded-xl bg-slate-800/40 border border-emerald-500/30 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">LOW 安全只读清理</span>
+                <strong class="text-white text-sm">清理 7 天前或限制 journal 日志总容量至 500MB</strong>
+              </div>
+              <button onclick="simulateCopyCommand('journalctl --vacuum-size=500M')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-medium transition shadow">
+                <span>📋 复制命令</span>
+              </button>
+            </div>
+            <p class="text-xs text-slate-400">目的: 快速释放约 13GB 磁盘空间，立竿见影解除节点报警。</p>
+            <div class="bg-slate-950 p-2.5 rounded font-mono text-xs text-emerald-200/90 border border-slate-800">
+              journalctl --vacuum-size=500M
+            </div>
+          </div>
+        `;
+      } else if (type === 'crash') {
+        document.getElementById('alert-title').innerText = "KubePodCrashLooping: auth-service-68bb8-x2k4";
+        document.getElementById('alert-symptoms').innerText = "用户认证微服务 auth-service 启动即退出，持续处于 CrashLoopBackOff 状态。";
+        document.getElementById('rca-summary').innerText = "应用容器启动时无法找到环境变量引用的 ConfigMap 'jwt-config'";
+        document.getElementById('rca-root-cause').innerText = "容器启动日志明确报错：'ConfigMap jwt-config not found'。近期配置发布变更导致依赖的 ConfigMap 被误删除。";
+        document.getElementById('evidence-list').innerHTML = `
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold text-[10px]">pod_logs</span>
+              <p class="text-slate-300">FATAL: configmap 'jwt-config' not found in namespace default; process exited code 1</p>
+            </div>
+            <span class="text-emerald-400 text-[11px] flex-shrink-0">Conf: 100%</span>
+          </div>
+        `;
+        document.getElementById('actions-list').innerHTML = `
+          <div class="p-4 rounded-xl bg-slate-800/40 border border-blue-500/30 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">MEDIUM 配置补全</span>
+                <strong class="text-white text-sm">从备份或 GitOps 仓库重新同步 jwt-config</strong>
+              </div>
+              <button onclick="simulateCopyCommand('kubectl apply -f k8s/jwt-config.yaml')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition shadow">
+                <span>📋 复制命令</span>
+              </button>
+            </div>
+            <p class="text-xs text-slate-400">目的: 重新创建所需 ConfigMap 后，Pod 将自动恢复健康拉起。</p>
+            <div class="bg-slate-950 p-2.5 rounded font-mono text-xs text-blue-200/90 border border-slate-800">
+              kubectl apply -f k8s/jwt-config.yaml
+            </div>
+          </div>
+        `;
+      } else {
+        location.reload();
+      }
+    }
+
+    // 复制命令提示
+    function simulateCopyCommand(cmd) {
+      navigator.clipboard.writeText(cmd).then(() => {
+        alert("已成功复制建议命令到剪贴板：\n" + cmd + "\n\n请在受控运维终端中审查执行。");
+      }).catch(() => {
+        alert("命令草稿：\n" + cmd);
+      });
+    }
+
+    function copyFullReport() {
+      alert("已复制完整标准 RCA Markdown 诊断报告，可直接粘贴推送到钉钉/飞书群聊！");
+    }
+
+    function retriggerDiagnose() {
+      alert("已向 OpsPilot Agent 发起重新诊断请求，将在 2 秒内重新聚合最新现场事实！");
+    }
+
+    function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const container = document.getElementById('chat-messages');
+      
+      // User message element
+      const userDiv = document.createElement('div');
+      userDiv.className = "flex items-start gap-3 justify-end";
+      userDiv.innerHTML = `
+        <div class="bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none text-xs max-w-md shadow">
+          ${text}
+        </div>
+        <div class="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs text-slate-200">SRE</div>
+      `;
+      container.appendChild(userDiv);
+      input.value = "";
+
+      // Simulate Agent thinking & tool execution
+      setTimeout(() => {
+        const agentDiv = document.createElement('div');
+        agentDiv.className = "flex items-start gap-3";
+        agentDiv.innerHTML = `
+          <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-xs text-white">⚡</div>
+          <div class="space-y-2 max-w-xl">
+            <div class="bg-slate-800 text-slate-200 p-4 rounded-2xl rounded-tl-none text-xs space-y-3 border border-slate-700/60 shadow">
+              <p>已接收到针对目标的操作指令，安全沙箱已验证通过（纯只读调用）：</p>
+              <div class="p-2.5 rounded bg-slate-950 font-mono text-[11px] text-emerald-400 border border-slate-800">
+                ❯ [ReadOnlyTool]: 获取目标拓扑状态成功，未发现致命异常，指标处于平稳状态。
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(agentDiv);
+        container.scrollTop = container.scrollHeight;
+      }, 700);
+    }
+  </script>
+</body>
+</html>
