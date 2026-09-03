@@ -1,7 +1,6 @@
-import uuid
-from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-from opspilot.schemas.task import DiagnosticTask
+from pydantic import BaseModel, Field
+from opspilot.schemas.task import DiagnosticTask, generate_task_id, TargetType
 
 class AlertItem(BaseModel):
     status: str = "firing"
@@ -13,31 +12,46 @@ class AlertmanagerPayload(BaseModel):
     receiver: Optional[str] = None
     alerts: List[AlertItem] = Field(default_factory=list)
 
-    def to_diagnostic_tasks(self) -> List[DiagnosticTask]:
+    def to_diagnostic_tasks(self, firing_only: bool = True) -> List[DiagnosticTask]:
         tasks: List[DiagnosticTask] = []
         for alert in self.alerts:
-            labels = alert.labels
-            annos = alert.annotations
-            alertname = labels.get("alertname", "UnknownAlert")
+            # 过滤已恢复的告警
+            if firing_only and alert.status == "resolved":
+                continue
+
+            labels = alert.labels or {}
+            annos = alert.annotations or {}
+            alertname = labels.get("alertname") or "UnknownAlert"
+
+            pod = labels.get("pod")
+            node_target = labels.get("instance") or labels.get("node") or labels.get("host")
+
+            target_type: TargetType
+            target_name: str
+            namespace: Optional[str]
 
             # 区分 k8s_pod 与 linux_node
-            if "pod" in labels:
+            if pod:
                 target_type = "k8s_pod"
-                target_name = labels["pod"]
-                namespace = labels.get("namespace", "default")
-            elif "instance" in labels or "node" in labels or "host" in labels:
+                target_name = str(pod)
+                namespace = labels.get("namespace") or "default"
+            elif node_target:
                 target_type = "linux_node"
-                target_name = labels.get("instance") or labels.get("node") or labels.get("host")
+                # 如果包含端口（如 192.168.1.101:9100），清洗提取 host 部分
+                host = str(node_target).split(":")[0]
+                target_name = host if host else "unknown-node"
                 namespace = None
             else:
                 target_type = "k8s_pod"
-                target_name = labels.get("job", "unknown-service")
-                namespace = labels.get("namespace", "default")
+                job = labels.get("job")
+                target_name = str(job) if job else "unknown-service"
+                namespace = labels.get("namespace") or "default"
 
-            symptoms = annos.get("description") or annos.get("summary") or f"Alert {alertname} fired"
+            desc = annos.get("description") or annos.get("summary")
+            symptoms = str(desc) if desc else f"Alert {alertname} fired"
 
             tasks.append(DiagnosticTask(
-                task_id=f"alert-{uuid.uuid4().hex[:8]}",
+                task_id=generate_task_id("alert"),
                 source="alertmanager",
                 target_type=target_type,
                 target_name=target_name,
