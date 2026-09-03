@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 
 TargetType = Literal["k8s_pod", "linux_node"]
-TaskSource = Literal["alertmanager", "cli", "manual_api"]
+TaskSource = Literal["alertmanager", "grafana", "cli", "manual_api", "generic"]
 
 def generate_task_id(prefix: str = "task") -> str:
     """生成唯一的任务追踪 ID"""
@@ -11,7 +11,7 @@ def generate_task_id(prefix: str = "task") -> str:
 
 class DiagnosticTask(BaseModel):
     task_id: str = Field(default_factory=generate_task_id, description="唯一任务追踪ID")
-    source: TaskSource = Field(default="alertmanager", description="来源: alertmanager / cli / manual_api")
+    source: TaskSource = Field(default="alertmanager", description="来源: alertmanager / grafana / cli / manual_api / generic")
     target_type: TargetType = Field(..., description="目标类型: k8s_pod / linux_node")
     target_name: str = Field(..., min_length=1, description="目标实体名称 (Pod名或主机IP)")
     namespace: Optional[str] = Field(default=None, description="K8s 命名空间")

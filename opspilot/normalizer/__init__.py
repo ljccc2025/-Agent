@@ -11,6 +11,14 @@ from opspilot.normalizer.throttler import (
     StormThrottleResult,
     get_default_throttler,
 )
+from opspilot.normalizer.adapters import (
+    BaseAlertAdapter,
+    AlertmanagerAdapter,
+    GrafanaAlertAdapter,
+    GenericAlertAdapter,
+    NormalizerRegistry,
+    get_default_normalizer,
+)
 
 __all__ = [
     "generate_alert_fingerprint",
@@ -20,5 +28,10 @@ __all__ = [
     "AlertStormThrottler",
     "StormThrottleResult",
     "get_default_throttler",
+    "BaseAlertAdapter",
+    "AlertmanagerAdapter",
+    "GrafanaAlertAdapter",
+    "GenericAlertAdapter",
+    "NormalizerRegistry",
+    "get_default_normalizer",
 ]
-
