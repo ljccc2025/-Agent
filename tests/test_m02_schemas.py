@@ -44,3 +44,14 @@ def test_alert_webhook_response_m02_fields():
     )
     assert resp.deduplicated_count == 5
     assert resp.storm_throttled_count == 1
+
+def test_alert_webhook_response_defaults():
+    resp = AlertWebhookResponse(
+        status="ok",
+        message="Alerts processed",
+        dispatched_count=1
+    )
+    assert resp.deduplicated_count == 0
+    assert resp.storm_throttled_count == 0
+    assert resp.task_ids == []
+    assert resp.tasks == []
