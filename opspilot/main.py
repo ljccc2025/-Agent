@@ -53,6 +53,10 @@ def create_app() -> FastAPI:
             "docs": "/docs"
         }
 
+    @application.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> Response:
+        return Response(status_code=204)
+
     # 挂载业务路由
     application.include_router(webhook_router)
     application.include_router(diagnose_router)
