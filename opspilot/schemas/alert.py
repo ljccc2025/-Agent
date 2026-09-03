@@ -61,3 +61,12 @@ class AlertmanagerPayload(BaseModel):
                 symptoms=symptoms
             ))
         return tasks
+
+
+class AlertWebhookResponse(BaseModel):
+    status: str = Field(default="ok", description="处理状态")
+    message: str = Field(..., description="处理结果描述")
+    dispatched_count: int = Field(..., description="分发的排障任务总数")
+    task_ids: list[str] = Field(default_factory=list, description="分发的任务ID列表")
+    tasks: list[DiagnosticTask] = Field(default_factory=list, description="生成的任务实体明细")
+
